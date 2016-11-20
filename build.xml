@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="NetSuite Sample Client" default="help" basedir="../">
+
+	<property name="version.year" value="2016"/>
+	<property name="version.major" value="1"/>
+	<property name="zipfile" value="NSJavaClientERP${version.year}-${version.major}.zip"/>
+
+	 <presetdef name="javac">
+    <javac includeantruntime="false" />
+  </presetdef>
+	<!-- Axis values -->
+	<property name="proxy.jar" value="nsws-${version.year}_${version.major}.jar"/>
+	<property name="pkgname" value="webservices"/>
+	<property name="version-name" value="${version.year}_${version.major}"/>
+	<property name="proxy.download.timeout" value="600000"/>
+
+	<!--External properties file-->
+	<property file="nsclient.properties"/>
+	<property environment="env"/>
+
+	<!--Directory definitions-->
+	<property name="build.dir" value="${basedir}/build"/>
+	<property name="generated.build.dir" value="${basedir}/build.generated"/>
+	<property name="src.dir" value="${basedir}/src"/>
+	<property name="generated.src.dir" value="${basedir}/src.generated"/>
+	<property name="dist.dir" value="${basedir}/out"/>
+	<property name="axis.dir" value="${env.AXIS_HOME}"/>
+	<property name="lib.dir" value="${basedir}/lib"/>
+
+	<!-- Axis classpath -->
+	<path id="proxy.classpath">
+		<pathelement path="${axis.dir}/lib/axis.jar"/>
+		<pathelement path="${axis.dir}/lib/axis-ant.jar"/>
+		<pathelement path="${axis.dir}/lib/axis-schema.jar"/>
+		<pathelement path="${axis.dir}/lib/commons-discovery-0.2.jar"/>
+		<pathelement path="${axis.dir}/lib/commons-logging-1.0.4.jar"/>
+		<pathelement path="${axis.dir}/lib/jaxrpc.jar"/>
+		<pathelement path="${axis.dir}/lib/log4j-1.2.8.jar"/>
+		<pathelement path="${axis.dir}/lib/saaj.jar"/>
+		<pathelement path="${axis.dir}/lib/wsdl4j-1.5.1.jar"/>
+	</path>
+
+	<!-- Client classpath -->
+	<path id="client.classpath">
+		<path refid="proxy.classpath"/>
+		<pathelement path="${build.dir}"/>
+		<pathelement path="${generated.build.dir}"/>
+	</path>
+
+	<!-- Task definitions -->
+	<taskdef resource="axis-tasks.properties" classpathref="proxy.classpath"></taskdef>
+	<target name="init">
+		<echo>--------------------------------------------------------------</echo>
+		<echo>Project Root Directory is ${basedir}</echo>
+		<echo></echo>
+		<echo>JAVA_HOME is ${env.JAVA_HOME}</echo>
+		<echo>AXIS_HOME is ${axis.dir}</echo>
+		<echo></echo>
+		<echo>WSDL location is ${wsdl.url}</echo>
+		<echo>--------------------------------------------------------------</echo>
+		<fail unless="env.JAVA_HOME">
+			The JAVA2_HOME environment variable needs to be set in order to use this ant script. Please see README for details.
+		</fail>
+		<fail unless="env.AXIS_HOME">
+			The AXIS_HOME environment variable needs to be set in order to use this ant script. Please see README for details.
+		</fail>
+		<tstamp></tstamp>
+	</target>
+
+	<target name="help">
+		<echo>
+			Description: This is the Ant build script for the sample NetSuite web
+			services client application that demonstrates how to NetSuite's
+			web services using the Apache Axis platform.
+
+			Before you can use this script, please ensure that the following
+			variables have been set in the env.properties file:
+
+			AXIS_HOME - point to your Axis installation root
+
+			Usage:
+			ant deploy: Performs a new build including regenerating the proxy classes
+			ant compile: Compiles all java classes, including generated proxy classes
+			ant generate.proxy: Generates client proxies using Axis WSDL2Java
+			ant generate.proxy.jar: Generates a standalone jar file with the Axis client proxies
+			ant generate.proxy.jar.version-not-in-packages: Generates a standalone jar file with the Axis client proxies without a
+			NS endpoint version in the package names
+			ant clean: Cleans the current build
+		</echo>
+	</target>
+
+	<!-- Recycle client -->
+	<target name="deploy" depends="init, clean, generate.proxy, compile"
+	        description="Performs a new build including regenerating the proxy classes"/>
+
+	<!-- Compile client using generated classes -->
+	<target name="compile" depends="init, compile.proxy" description="Compiles all java classes">
+		<echo>Compiling client java sources...</echo>
+		<mkdir dir="${build.dir}"/>
+		<javac srcdir="${src.dir}" destdir="${build.dir}" verbose="false" debug="on">
+			<classpath refid="client.classpath"/>
+		</javac>
+	</target>
+
+	<!-- Generate client interfaces -->
+	<target name="generate.proxy" depends="init" description="Generates client proxies using Axis WSDL2Java">
+		<delete dir="${generated.src.dir}"/>
+		<mkdir dir="${generated.src.dir}"/>
+		<echo>Generating client interfaces using Apache Axis</echo>
+		<echo>From ${wsdl.url}</echo>
+		<delete dir="${generated.build.dir}"/>
+		<antcall target="generate.proxy.version-in-packages"/>
+		<antcall target="generate.proxy.version-not-in-packages"/>
+	</target>
+
+	<target name="generate.proxy.jar" description="Generates client proxies jar file.">
+		<antcall target="generate.proxy"/>
+		<antcall target="compile.proxy"/>
+		<antcall target="package.proxy"/>
+	</target>
+	<!--
+    The difference between generate.proxy.jar and generate.proxy.jar.version-not-in-packages is that the packages have following names:
+	com.netsuite.webservices.lists.accounting_2013_1.Currency
+	vs
+	com.netsuite.webservices.lists.accounting.Currency
+
+	You'll need to modify NSClient.java imports and path as well.
+	-->
+	<target name="generate.proxy.jar.version-not-in-packages"
+	        description="Generates client proxies jar file WITHOUT NS endpoint version in package names..">
+		<property name="generate-version-not-in-packages" value="true"/>
+		<antcall target="generate.proxy.jar"/>
+	</target>
+
+	<!-- Create jar file from axis proxy classes -->
+	<target name="package.proxy">
+		<echo>Creating proxy jar file...</echo>
+		<mkdir dir="${lib.dir}"/>
+		<jar destfile="${lib.dir}/${proxy.jar}" basedir="${generated.build.dir}"/>
+	</target>
+
+	<!-- Compile generated classes -->
+	<target name="compile.proxy">
+		<echo>Compiling proxy java sources...</echo>
+		<mkdir dir="${generated.build.dir}"/>
+		<mkdir dir="${generated.src.dir}"/>
+		<javac srcdir="${generated.src.dir}" destdir="${generated.build.dir}" verbose="false" debug="on" memoryMaximumSize="1024m"
+		       fork="true">
+			<classpath refid="proxy.classpath"/>
+		</javac>
+	</target>
+
+	<!-- Generate proxy classes in packages WITH endpoint version -->
+	<target name="generate.proxy.version-in-packages" unless="generate-version-not-in-packages">
+		<axis-wsdl2java output="${generated.src.dir}" verbose="true" url="${wsdl.url}" all="true" wrapArrays="true"
+		                timeout="${proxy.download.timeout}">
+			<mapping namespace="http://axis.apache.org/ns/interop" package="interop"></mapping>
+		</axis-wsdl2java>
+	</target>
+
+	<!-- Generate proxy classes in packages WITHOUT endpoint version -->
+	<!-- Keep in sync with XSDs ! -->
+	<target name="generate.proxy.version-not-in-packages" if="generate-version-not-in-packages">
+		<axis-wsdl2java output="${generated.src.dir}" verbose="true" url="${wsdl.url}" all="true" wrapArrays="true"
+		                timeout="${proxy.download.timeout}">
+			<mapping namespace="http://axis.apache.org/ns/interop" package="interop"></mapping>
+			<mapping namespace="urn:platform_${version-name}.webservices.netsuite.com" package="com.netsuite.${pkgname}.platform"/>
+			<mapping namespace="urn:messages_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.messages"/>
+			<mapping namespace="urn:common_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.common"/>
+			<mapping namespace="urn:types.common_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.common.types"/>
+			<mapping namespace="urn:faults_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.faults"/>
+			<mapping namespace="urn:types.faults_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.faults.types"/>
+			<mapping namespace="urn:core_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.core"/>
+			<mapping namespace="urn:types.core_${version-name}.platform.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.platform.core.types"/>
+			<mapping namespace="urn:relationships_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.relationships"/>
+			<mapping namespace="urn:types.relationships_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.relationships.types"/>
+			<mapping namespace="urn:supplychain_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.supplychain"/>
+			<mapping namespace="urn:types.supplychain_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.supplychain.types"/>
+			<mapping namespace="urn:lists.webservices.netsuite.com" package="com.netsuite.${pkgname}.lists"/>
+			<mapping namespace="urn:scheduling_${version-name}.activities.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.activities.scheduling"/>
+			<mapping namespace="urn:types.scheduling_${version-name}.activities.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.activities.scheduling.types"/>
+			<mapping namespace="urn:communication_${version-name}.general.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.general.communication"/>
+			<mapping namespace="urn:types.communication_${version-name}.general.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.general.communication.types"/>
+			<mapping namespace="urn:support_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.support"/>
+			<mapping namespace="urn:types.support_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.support.types"/>
+			<mapping namespace="urn:transactions.webservices.netsuite.com" package="com.netsuite.${pkgname}.transactions"/>
+			<mapping namespace="urn:sales_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.sales"/>
+			<mapping namespace="urn:types.sales_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.sales.types"/>
+			<mapping namespace="urn:bank_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.bank"/>
+			<mapping namespace="urn:types.bank_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.bank.types"/>
+			<mapping namespace="urn:general_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.general"/>
+			<mapping namespace="urn:types.general_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.general.types"/>
+			<mapping namespace="urn:inventory_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.inventory"/>
+			<mapping namespace="urn:types.inventory_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.inventory.types"/>
+			<mapping namespace="urn:customization_${version-name}.setup.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.setup.customization"/>
+			<mapping namespace="urn:types.customization_${version-name}.setup.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.setup.customization.types"/>
+			<mapping namespace="urn:employees_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.employees"/>
+			<mapping namespace="urn:types.employees_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.employees.types"/>
+			<mapping namespace="urn:accounting_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.accounting"/>
+			<mapping namespace="urn:types.accounting_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.accounting.types"/>
+			<mapping namespace="urn:filecabinet_${version-name}.documents.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.documents.filecabinet"/>
+			<mapping namespace="urn:types.filecabinet_${version-name}.documents.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.documents.filecabinet.types"/>
+			<mapping namespace="urn:employees_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.employees"/>
+			<mapping namespace="urn:types.employees_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.employees.types"/>
+			<mapping namespace="urn:customers_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.customers"/>
+			<mapping namespace="urn:types.customers_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.customers.types"/>
+			<mapping namespace="urn:financial_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.financial"/>
+			<mapping namespace="urn:types.financial_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.financial.types"/>
+			<mapping namespace="urn:purchases_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.purchases"/>
+			<mapping namespace="urn:types.purchases_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.purchases.types"/>
+			<mapping namespace="urn:marketing_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.marketing"/>
+			<mapping namespace="urn:types.marketing_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.marketing.types"/>
+			<mapping namespace="urn:website_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.website"/>
+			<mapping namespace="urn:types.website_${version-name}.lists.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.lists.website.types"/>
+			<mapping namespace="urn:demandplanning_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.demandplanning"/>
+			<mapping namespace="urn:types.demandplanning_${version-name}.transactions.webservices.netsuite.com"
+			         package="com.netsuite.${pkgname}.transactions.demandplanning.types"/>
+		</axis-wsdl2java>
+	</target>
+
+	<!-- Clean all client classes -->
+	<target name="clean" description="Cleanup client.">
+		<delete dir="${generated.src.dir}"/>
+		<delete dir="${generated.build.dir}"/>
+		<delete dir="${lib.dir}"/>
+		<delete dir="${build.dir}"/>
+		<delete dir="${dist.dir}"/>
+	</target>
+
+	<target name="package" description="Create zip distribution file.">
+		<zip
+				destfile="${dist.dir}/${zipfile}"
+				basedir="${basedir}"
+				excludes="out/**, lib/**, .idea/**, *.iml, README.doc"
+				update="true"/>
+	</target>
+
+</project>
